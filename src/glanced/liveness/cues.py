@@ -138,8 +138,9 @@ class LivenessTuning:
     """
 
     #: Gloss sat at 0 on a live face and 30-40% against a phone screen in
-    #: upstream testing, so this floor is far below the observed spoof signal.
-    gloss_level: float = 0.04
+    #: upstream testing, so 0.18 cleanly separates real faces from display screens
+    #: without triggering on monitor reflection or glasses.
+    gloss_level: float = 0.18
     gloss_frames: int = 3
 
     #: Matching the explicit spec this cue was built to: "if the device detector

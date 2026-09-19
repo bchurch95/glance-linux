@@ -341,11 +341,7 @@ class Daemon:
         try:
             with Camera(config) as camera:
                 self._active_depth_device = camera.resolved_depth_device
-                require_depth = (
-                    self.require_depth
-                    if self.require_depth is not None
-                    else bool(camera.resolved_depth_device)
-                )
+                require_depth = bool(self.require_depth)
                 pipeline = UnlockPipeline(
                     self.store,
                     mode=self.mode,
