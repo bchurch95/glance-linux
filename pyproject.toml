@@ -21,6 +21,7 @@ runtime = [
     "onnxruntime>=1.17",
     "mediapipe>=0.10.14,<1.0.0",
     "cryptography>=42",
+    "openvino>=2024.0.0",
 ]
 dev = ["pytest>=8"]
 # Only `glancectl enroll --gui` imports Qt. The headless enroll, the daemon and

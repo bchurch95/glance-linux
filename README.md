@@ -83,24 +83,37 @@ machine authenticates you belongs to a command you run and watch, not to an
 unattended pacman transaction editing files that belong to hyprland and
 omarchy.
 
-## Setup from source
+## Features in this Fork (bchurch95/glance-linux)
+
+- **Automated All-in-One Installer**: Run `./install.sh` to build, install, fetch models, wire systemd, configure PAM, and install the lock screen indicator in a single step.
+- **Acer 3D IR Depth Camera Support**: Auto-discovers paired infrared depth sensors (e.g. `/dev/video2` on Acer laptops), runs parallel non-blocking IR frame capture, and validates true 3D facial structure and pose agreement against 2D presentation spoofs.
+- **Intel Lunar Lake NPU Acceleration**: Compiles ArcFace via OpenVINO to run on the Intel AI Boost NPU (`/dev/accel/accel0` with `intel_vpu`). Lowers inference latency from **174 ms to 2.01 ms** (87x speedup) with near-zero CPU usage.
+- **Smoothed Enrollment Preview**: Eliminates preview jumping and flickering during enrollment head turns using an Exponential Moving Average (EMA) crop filter.
+- **Instant Empty-Enter Lock Screen Unlock**: Press <kbd>Enter</kbd> directly on the Omarchy lock screen without needing to type a dummy character.
+
+## Automated Install (Recommended)
+
+Clone the repository and run the automated installer:
+
+```bash
+git clone https://github.com/bchurch95/glance-linux.git
+cd glance-linux
+./install.sh
+```
+
+The script will automatically build the PAM module, set up the Python venv, download AI models, configure user systemd units, link the Omarchy plugin, and wire the lock screen.
+
+## Manual Setup from source
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -e '.[runtime,gui,dev]'
-.venv/bin/python -m pytest                   # no camera needed
+.venv/bin/python -m pytest                   # run test suite
 .venv/bin/glancectl fetch-model              # ~3MB landmarker + ~13MB ArcFace
-.venv/bin/glancectl live --mode heavy        # liveness against your webcam, no unlock
-```
-
-Then the real thing:
-
-```bash
-packaging/install.sh                             # user service + plugin symlink
+packaging/install.sh                         # user service + plugin symlink
 glancectl enroll --gui --name "$USER" --remember # guided sweep, sets the passphrase
-glancectl authenticate                       # one full scan: recognition + liveness
-glancectl setup-pam                          # wire the lock screen (sudo; keep a root shell open)
-glancectl setup-lock                         # optional: the lock screen indicator + its post-update hook
-omarchy plugin enable io.github.ayandexyz.glance          # the bar widget
+glancectl authenticate                       # full scan: recognition + liveness
+glancectl setup-pam                          # wire the lock screen (sudo)
+glancectl setup-lock                         # optional: animated Face ID lock screen indicator
 ```
 
 Lock the screen, press Enter (shell lock: any character then Enter), look at
