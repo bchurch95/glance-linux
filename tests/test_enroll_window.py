@@ -37,3 +37,32 @@ def test_the_completion_ring_sits_inside_the_lit_ticks():
     outer = (enroll_window.RING_DIAMETER / 2 + enroll_window.TICK_LENGTH_LIT
              - enroll_window.COMPLETION_RING_INSET)
     assert outer < tips
+
+
+def test_smooth_cropper_crops_and_smooths():
+    import numpy as np
+    from types import SimpleNamespace
+
+    cropper = enroll_window.SmoothCropper(alpha=0.2)
+    native = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    # First frame with face detected at (200, 100, 100, 100)
+    obs1 = SimpleNamespace(native_bounding_box=(200.0, 100.0, 100.0, 100.0))
+    img1 = cropper.crop(native, obs1)
+    assert not img1.isNull()
+    assert img1.width() == img1.height()
+    first_cx = cropper.cx
+    first_cy = cropper.cy
+
+    # Second frame with face missing (e.g. head turn) - should NOT jump to center
+    img2 = cropper.crop(native, None)
+    assert not img2.isNull()
+    assert cropper.cx == pytest.approx(first_cx)
+    assert cropper.cy == pytest.approx(first_cy)
+
+    # Face moves to (300, 200)
+    obs3 = SimpleNamespace(native_bounding_box=(300.0, 200.0, 100.0, 100.0))
+    cropper.crop(native, obs3)
+    # EMA moved partially towards target
+    assert first_cx < cropper.cx < 350.0
+

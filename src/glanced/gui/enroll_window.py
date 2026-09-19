@@ -108,6 +108,7 @@ class CaptureWorker(QObject):
         self.samples_per_pose = samples_per_pose
         self.timeout = timeout
         self._stop = False
+        self._cropper = SmoothCropper()
 
     def stop(self) -> None:
         self._stop = True
@@ -143,7 +144,7 @@ class CaptureWorker(QObject):
                     observation = processor.process(native, now, want_embedding=True)
                     completed = session.offer(observation, now, frame_width=native.shape[1])
 
-                    self.frame.emit(_disc_image(native, observation))
+                    self.frame.emit(self._cropper.crop(native, observation))
                     self.progressed.emit(session.progress)
                     if completed is not None:
                         self.pose_captured.emit(completed.name)
@@ -158,30 +159,68 @@ class CaptureWorker(QObject):
         self.finished.emit(Sample(session.embeddings, session.pose_names))
 
 
-def _disc_image(native: np.ndarray, observation) -> QImage:
-    """A square, mirrored crop around the face, ready to draw in the disc.
-
-    Mirrored because a preview of your own face that moves the wrong way when
-    you turn your head is disorienting — every selfie view is flipped — and
-    because the poses are phrased from the user's point of view.
+class SmoothCropper:
+    """Maintains a smoothed crop window across frames so head turns and lost
+    landmarks don't snap or jitter the enrollment preview disc.
     """
-    height, width = native.shape[:2]
-    side = float(min(width, height))
-    cx, cy = width / 2.0, height / 2.0
 
-    if observation is not None:
-        x, y, w, h = observation.native_bounding_box
-        cx, cy = x + w / 2.0, y + h / 2.0
-        side = float(min(max(w, h) * 2.0, width, height))
+    def __init__(self, alpha: float = 0.15) -> None:
+        self.alpha = alpha
+        self.cx: Optional[float] = None
+        self.cy: Optional[float] = None
+        self.side: Optional[float] = None
+        self.missing_frames = 0
 
-    half = side / 2.0
-    cx = min(max(cx, half), width - half)
-    cy = min(max(cy, half), height - half)
-    x0, y0 = int(cx - half), int(cy - half)
-    crop = np.ascontiguousarray(native[y0 : y0 + int(side), x0 : x0 + int(side)])
+    def crop(self, native: np.ndarray, observation) -> QImage:
+        height, width = native.shape[:2]
+        full_side = float(min(width, height))
+        default_cx = width / 2.0
+        default_cy = height / 2.0
 
-    image = QImage(crop.data, crop.shape[1], crop.shape[0], crop.strides[0], QImage.Format_RGB888)
-    return image.copy().transformed(QTransform().scale(-1.0, 1.0))
+        if observation is not None:
+            x, y, w, h = observation.native_bounding_box
+            target_cx = x + w / 2.0
+            target_cy = y + h / 2.0
+            target_side = float(min(max(w, h) * 2.2, full_side))
+            self.missing_frames = 0
+        else:
+            self.missing_frames += 1
+            if self.cx is None or self.missing_frames > 45:
+                target_cx = default_cx
+                target_cy = default_cy
+                target_side = full_side
+            else:
+                # Retain previous target so momentary loss doesn't snap zoom/pan
+                target_cx = self.cx
+                target_cy = self.cy
+                target_side = self.side
+
+        if self.cx is None:
+            self.cx = target_cx
+            self.cy = target_cy
+            self.side = target_side
+        else:
+            self.cx += self.alpha * (target_cx - self.cx)
+            self.cy += self.alpha * (target_cy - self.cy)
+            self.side += self.alpha * (target_side - self.side)
+
+        s = int(round(self.side))
+        s = max(1, min(s, min(width, height)))
+        clamped_cx = min(max(self.cx, s / 2.0), width - s / 2.0)
+        clamped_cy = min(max(self.cy, s / 2.0), height - s / 2.0)
+        x0 = int(round(clamped_cx - s / 2.0))
+        y0 = int(round(clamped_cy - s / 2.0))
+        x0 = max(0, min(x0, width - s))
+        y0 = max(0, min(y0, height - s))
+
+        crop = np.ascontiguousarray(native[y0 : y0 + s, x0 : x0 + s])
+        image = QImage(crop.data, crop.shape[1], crop.shape[0], crop.strides[0], QImage.Format_RGB888)
+        return image.copy().transformed(QTransform().scale(-1.0, 1.0))
+
+
+def _disc_image(native: np.ndarray, observation) -> QImage:
+    """A square, mirrored crop around the face, ready to draw in the disc."""
+    return SmoothCropper(alpha=1.0).crop(native, observation)
 
 
 # --- the ring -------------------------------------------------------------
