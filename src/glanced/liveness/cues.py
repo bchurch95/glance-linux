@@ -354,15 +354,30 @@ class LivenessEvaluator:
         )
 
     def _current_decision(self) -> LivenessDecision:
+        # Check if 3D physical depth is confirmed by hardware IR/depth camera
+        depth_confirmed = (
+            LivenessCue.DEPTH_CONFIRMED in self.enabled_cues
+            and (
+                self.states.get(LivenessCue.DEPTH_CONFIRMED, LivenessCueState()).has_fired
+                or self.states.get(LivenessCue.DEPTH_CONFIRMED, LivenessCueState()).frames_counted >= 1
+            )
+        )
+
         # Deny is evaluated first and is unconditional — it overrides a
         # confirmation that already happened, which is the whole point of
         # splitting the cues by role rather than scoring them together.
+        #
+        # Exception: when true 3D facial depth is actively confirmed via
+        # the hardware depth/IR sensor, 2D specular reflection on the RGB camera
+        # is genuine skin/glasses highlight rather than a flat phone screen display.
         for cue in ALL_CUES:
             if (
                 cue.role is CueRole.DENY
                 and cue in self.enabled_cues
                 and self.states.get(cue, LivenessCueState()).has_fired
             ):
+                if cue is LivenessCue.GLOSS_GLARE and depth_confirmed:
+                    continue
                 return LivenessDecision(DecisionKind.DENIED, cue)
 
         if self.mode is LivenessMode.LIGHT:

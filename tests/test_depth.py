@@ -134,3 +134,24 @@ def test_find_paired_depth_camera_hardware():
     res = find_paired_depth_camera("/dev/video0")
     if res is not None:
         assert res == "/dev/video2"
+
+
+def test_depth_confirmed_overrides_gloss_glare():
+    from glanced.liveness.cues import LivenessEvaluator, LivenessCue, CueReading, DecisionKind
+
+    evaluator = LivenessEvaluator()
+    # Feed readings with both GLOSS_GLARE (deny) and DEPTH_CONFIRMED (confirm)
+    readings = {
+        LivenessCue.GLOSS_GLARE: CueReading(level=0.5, confidence=1.0),
+        LivenessCue.DEPTH_CONFIRMED: CueReading(level=1.0, confidence=1.0),
+    }
+
+    # Observe 3 frames to trigger thresholds
+    for _ in range(3):
+        snapshot = evaluator.observe(readings)
+
+    # GLOSS_GLARE has fired, but DEPTH_CONFIRMED has also fired/counted, so GLOSS_GLARE is overridden
+    assert evaluator.states[LivenessCue.GLOSS_GLARE].has_fired is True
+    assert snapshot.decision.kind != DecisionKind.DENIED
+    assert snapshot.decision.kind == DecisionKind.CONFIRMED
+
