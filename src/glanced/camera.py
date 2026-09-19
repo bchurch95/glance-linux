@@ -111,6 +111,7 @@ class CameraConfig:
     width: int = 1280
     height: int = 720
     fps: int = 30
+    fourcc: Optional[str] = "MJPG"
     #: Depth/IR camera node, "auto" to discover paired depth camera, or None to disable.
     depth_device: Optional[str] = "auto"
     depth_width: int = 640
@@ -194,6 +195,8 @@ class Camera:
         capture = cv2.VideoCapture(self.config.device, cv2.CAP_V4L2)
         if not capture.isOpened():
             raise RuntimeError(f"could not open {self.config.device}")
+        if self.config.fourcc:
+            capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*self.config.fourcc))
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
         capture.set(cv2.CAP_PROP_FPS, self.config.fps)
