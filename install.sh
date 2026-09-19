@@ -192,6 +192,29 @@ if (( want_plugin )) && [[ -d "${XDG_CONFIG_HOME:-$HOME/.config}/omarchy" || -d 
     fi
   fi
 
+  # Ensure glancectlPath is configured in shell.json so the widget finds the venv binary
+  shell_json="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/shell.json"
+  if [[ -f "$shell_json" ]]; then
+    python3 -c '
+import json, sys
+path, ctl = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "r") as f:
+        data = json.load(f)
+    changed = False
+    for section in ("left", "center", "right"):
+        for item in data.get("bar", {}).get(section, []):
+            if item.get("id") == "io.github.ayandexyz.glance" and item.get("glancectlPath") != ctl:
+                item["glancectlPath"] = ctl
+                changed = True
+    if changed:
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+except Exception:
+    pass
+' "$shell_json" "$glancectl" 2>/dev/null || true
+  fi
+
   # Apply Face ID indicator patch on Omarchy lock screen
   log_info "Installing Face ID lock screen indicator (requires sudo)..."
   "$glancectl" setup-lock || log_warn "Could not auto-apply lock indicator; run 'glancectl setup-lock' later."
