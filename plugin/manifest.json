@@ -24,7 +24,7 @@
     "allowMultiple": false,
     "defaults": {
       "refreshIntervalSec": 30,
-      "glancectlPath": ""
+      "glancectlPath": "/home/ben/Projects/glance-linux/.venv/bin/glancectl"
     },
     "schema": [
       {
