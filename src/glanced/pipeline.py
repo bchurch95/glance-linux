@@ -26,7 +26,7 @@ from typing import Optional
 
 import numpy as np
 
-from .liveness import LivenessAnalyzer, LivenessFrame, LivenessMode
+from .liveness import LivenessAnalyzer, LivenessCue, LivenessFrame, LivenessMode
 from .store import EnrollmentStore, Identity
 
 #: Cosine similarity above which an ArcFace embedding is considered a match.
@@ -72,10 +72,12 @@ class UnlockPipeline:
         mode: LivenessMode = LivenessMode.LIGHT,
         match_threshold: float = DEFAULT_MATCH_THRESHOLD,
         scan_timeout: float = DEFAULT_SCAN_TIMEOUT,
+        require_depth: bool = False,
     ) -> None:
         self.store = store
         self.match_threshold = match_threshold
         self.scan_timeout = scan_timeout
+        self.require_depth = require_depth
         self.analyzer = LivenessAnalyzer()
         self.analyzer.mode_provider = lambda: mode
         self._started: Optional[float] = None
@@ -103,6 +105,10 @@ class UnlockPipeline:
             return None
         if self._match is None:
             return ScanResult(Outcome.NO_MATCH, reason="No enrolled face matched.")
+        if self.require_depth and not self.analyzer.last_snapshot.state(LivenessCue.DEPTH_CONFIRMED).has_fired:
+            return ScanResult(
+                Outcome.TIMED_OUT, reason="Could not confirm 3D depth before the scan expired."
+            )
         return ScanResult(
             Outcome.TIMED_OUT, reason="Could not confirm a real face before the scan expired."
         )
@@ -128,9 +134,14 @@ class UnlockPipeline:
         if embedding is not None and self._match is None:
             self._match = self.store.match(embedding, self.match_threshold)
 
+        depth_ok = (
+            not self.require_depth
+            or snapshot.state(LivenessCue.DEPTH_CONFIRMED).has_fired
+        )
+
         # Both gates, in either order — a match with liveness still pending is
         # not an unlock, and confirmed liveness with no match is not either.
-        if self._match is not None and snapshot.decision.is_confirmed:
+        if self._match is not None and snapshot.decision.is_confirmed and depth_ok:
             identity, score = self._match
             return ScanResult(Outcome.UNLOCKED, identity=identity, similarity=score)
 

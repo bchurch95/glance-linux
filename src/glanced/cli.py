@@ -326,6 +326,11 @@ def _status(args: argparse.Namespace) -> int:
             print(f"armed:      {p['armed']}")
             print(f"liveness:   {p['mode']}")
             print(f"camera:     {p['camera']}")
+            if p.get("depthCamera"):
+                depth_info = p["depthCamera"]
+                if p.get("depthActive"):
+                    depth_info += f" (active: {p['depthActive']})"
+                print(f"depth/IR:   {depth_info}")
             if p.get("lockedOut"):
                 print(f"locked out: {p['lockedOut']}s remaining")
         print(f"enrolled:   {p['enrolled']}")
@@ -451,9 +456,11 @@ def _live(args: argparse.Namespace) -> int:
     from .liveness import LivenessMode
     from .livetest import run
 
+    depth_dev = None if getattr(args, "no_depth", False) else getattr(args, "depth_device", "auto")
     return run(
         mode=LivenessMode(args.mode),
         device=args.device,
+        depth_device=depth_dev,
         scan_seconds=args.scan_seconds,
         preview=args.preview,
     )
@@ -464,9 +471,12 @@ def _daemon(args: argparse.Namespace) -> int:
     from .liveness import LivenessMode
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    depth_dev = None if getattr(args, "no_depth", False) else getattr(args, "depth_device", "auto")
     daemon = Daemon(
         mode=LivenessMode(args.mode),
         device=args.device,
+        depth_device=depth_dev,
+        require_depth=getattr(args, "require_depth", None),
         scan_timeout=args.scan_timeout,
         no_face_timeout=args.no_face_timeout,
         preview=not args.no_preview,
@@ -563,6 +573,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     live.add_argument("--mode", choices=["light", "heavy"], default="heavy")
     live.add_argument("--device", default="/dev/video0")
+    live.add_argument("--depth-device", default="auto",
+                      help="3D depth/IR camera device node or 'auto' to detect paired Acer/IR sensor")
+    live.add_argument("--no-depth", action="store_true",
+                      help="disable 3D depth camera and use 2D camera only")
     live.add_argument("--scan-seconds", type=float, default=10.0)
     live.add_argument("--preview", action="store_true", help="also show the camera window")
     live.set_defaults(func=_live)
@@ -575,6 +589,12 @@ def main(argv: list[str] | None = None) -> int:
     daemon = subparsers.add_parser("daemon", help="run the service")
     daemon.add_argument("--mode", choices=["light", "heavy"], default="light")
     daemon.add_argument("--device", default="/dev/video0")
+    daemon.add_argument("--depth-device", default="auto",
+                        help="3D depth/IR camera device node or 'auto' to detect paired Acer/IR sensor")
+    daemon.add_argument("--no-depth", action="store_true",
+                        help="disable 3D depth camera and use 2D camera only")
+    daemon.add_argument("--require-depth", action="store_true", default=None,
+                        help="require 3D depth confirmation before unlock")
     daemon.add_argument("--scan-timeout", type=float, default=8.0, help="seconds per unlock attempt")
     daemon.add_argument("--no-face-timeout", type=float, default=3.0,
                         help="give up this early when no face is in view, so a typed password is not kept waiting")

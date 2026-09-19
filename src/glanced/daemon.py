@@ -86,6 +86,8 @@ class Daemon:
         *,
         mode: LivenessMode = LivenessMode.LIGHT,
         device: str = "/dev/video0",
+        depth_device: Optional[str] = "auto",
+        require_depth: Optional[bool] = None,
         store_path: Path = paths.STORE_PATH,
         scan_timeout: float = DEFAULT_SCAN_TIMEOUT,
         no_face_timeout: float = DEFAULT_NO_FACE_TIMEOUT,
@@ -97,6 +99,9 @@ class Daemon:
     ) -> None:
         self.mode = mode
         self.device = device
+        self.depth_device = depth_device
+        self.require_depth = require_depth
+        self._active_depth_device: Optional[str] = None
         self.store_path = Path(store_path)
         self.scan_timeout = scan_timeout
         self.no_face_timeout = no_face_timeout
@@ -253,6 +258,8 @@ class Daemon:
             "enrolled": self.store_path.exists(),
             "remembered": paths.PASSPHRASE_FILE.exists(),
             "camera": self.device,
+            "depthCamera": self.depth_device,
+            "depthActive": self._active_depth_device,
             "preview": self.preview,
             "models": models.status(),
             "pam": pamsetup.status(),
@@ -327,17 +334,38 @@ class Daemon:
         from .camera import Camera, CameraConfig
 
         processor = self._get_processor()
-        pipeline = UnlockPipeline(self.store, mode=self.mode, scan_timeout=self.scan_timeout)
-        pipeline.begin()
-        started = time.monotonic()
-        saw_face = False
         preview = PreviewWriter() if self.preview else None
+        saw_face = False
 
+        config = CameraConfig(device=self.device, depth_device=self.depth_device)
         try:
-            with Camera(CameraConfig(device=self.device)) as camera:
-                for native in camera.frames():
-                    now = time.monotonic()
-                    observation = processor.process(native, now, want_embedding=not pipeline.matched)
+            with Camera(config) as camera:
+                self._active_depth_device = camera.resolved_depth_device
+                require_depth = (
+                    self.require_depth
+                    if self.require_depth is not None
+                    else bool(camera.resolved_depth_device)
+                )
+                pipeline = UnlockPipeline(
+                    self.store,
+                    mode=self.mode,
+                    scan_timeout=self.scan_timeout,
+                    require_depth=require_depth,
+                )
+                pipeline.begin()
+                started = time.monotonic()
+
+                for pair in camera.frame_pairs():
+                    now = pair.timestamp or time.monotonic()
+                    native = pair.rgb
+                    native_depth = pair.depth
+                    observation = (
+                        processor.process_pair(
+                            native, native_depth, now, want_embedding=not pipeline.matched
+                        )
+                        if hasattr(processor, "process_pair")
+                        else processor.process(native, now, want_embedding=not pipeline.matched)
+                    )
                     if preview is not None:
                         # Published either way: with no face detected the crop
                         # falls back to the middle of the frame, which is what

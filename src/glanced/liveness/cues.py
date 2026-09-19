@@ -51,6 +51,8 @@ class LivenessCue(str, Enum):
     FLAT_VS_3D = "flatVs3D"
     DEPTH_POSE = "depthPose"
     BLINK = "blink"
+    DEPTH_CONFIRMED = "depthConfirmed"
+    DEPTH_SPOOF = "depthSpoof"
 
     @property
     def title(self) -> str:
@@ -60,11 +62,13 @@ class LivenessCue(str, Enum):
             LivenessCue.FLAT_VS_3D: "Flat vs 3D",
             LivenessCue.DEPTH_POSE: "Depth/pose",
             LivenessCue.BLINK: "Blink",
+            LivenessCue.DEPTH_CONFIRMED: "Depth confirmed",
+            LivenessCue.DEPTH_SPOOF: "Depth spoof",
         }[self]
 
     @property
     def role(self) -> CueRole:
-        if self in (LivenessCue.GLOSS_GLARE, LivenessCue.DEVICE_DETECTED):
+        if self in (LivenessCue.GLOSS_GLARE, LivenessCue.DEVICE_DETECTED, LivenessCue.DEPTH_SPOOF):
             return CueRole.DENY
         return CueRole.CONFIRM
 
@@ -88,6 +92,12 @@ class LivenessCue(str, Enum):
             ),
             LivenessCue.BLINK: (
                 "Eye aspect ratio dipped and recovered — a photo cannot blink."
+            ),
+            LivenessCue.DEPTH_CONFIRMED: (
+                "Active 3D depth/IR sensor detected live facial contours and active illumination."
+            ),
+            LivenessCue.DEPTH_SPOOF: (
+                "Face detected in 2D but rejected by 3D depth/IR sensor (screen or photo attack)."
             ),
         }[self]
 
@@ -167,6 +177,12 @@ class LivenessTuning:
     #: not a coincidence.
     blink_frames: int = 1
 
+    #: 3D Depth / IR tuning
+    depth_confirmed_level: float = 0.5
+    depth_confirmed_frames: int = 2
+    depth_spoof_level: float = 0.5
+    depth_spoof_frames: int = 4
+
     #: Frames Light mode waits before auto-confirming, so the deny cues get a
     #: fair chance to fire first. At ~20fps this is well under a tenth of a
     #: second — imperceptible, and recognition itself takes longer — but without
@@ -182,6 +198,8 @@ class LivenessTuning:
             LivenessCue.DEPTH_POSE: self.depth_pose_level,
             # Any confident blink reading is the event; see `blink_frames`.
             LivenessCue.BLINK: 0.5,
+            LivenessCue.DEPTH_CONFIRMED: self.depth_confirmed_level,
+            LivenessCue.DEPTH_SPOOF: self.depth_spoof_level,
         }[cue]
 
     def frames(self, cue: LivenessCue) -> int:
@@ -191,6 +209,8 @@ class LivenessTuning:
             LivenessCue.FLAT_VS_3D: self.flat_vs_3d_frames,
             LivenessCue.DEPTH_POSE: self.depth_pose_frames,
             LivenessCue.BLINK: self.blink_frames,
+            LivenessCue.DEPTH_CONFIRMED: self.depth_confirmed_frames,
+            LivenessCue.DEPTH_SPOOF: self.depth_spoof_frames,
         }[cue]
 
 
@@ -234,6 +254,11 @@ class LivenessDecision:
             return (
                 "A device-shaped rectangle was detected around the face — "
                 "this looks like a photo or screen."
+            )
+        if self.cue is LivenessCue.DEPTH_SPOOF:
+            return (
+                "Depth check failed — face was not confirmed by the 3D depth/IR sensor "
+                "(suspected photo or screen spoof)."
             )
         return "Liveness check failed."
 
@@ -383,6 +408,18 @@ def device_detected(frame: Optional[LivenessFrame]) -> CueReading:
     return CueReading(level=overlap, confidence=1.0)
 
 
+def depth_confirmed(frame: Optional[LivenessFrame]) -> CueReading:
+    if frame is None or frame.depth_reading is None:
+        return NO_READING
+    return frame.depth_reading
+
+
+def depth_spoof(frame: Optional[LivenessFrame]) -> CueReading:
+    if frame is None or frame.depth_spoof_reading is None:
+        return NO_READING
+    return frame.depth_spoof_reading
+
+
 def readings(
     window: Sequence[LivenessFrame], geometry: GeometryLivenessResult
 ) -> dict[LivenessCue, CueReading]:
@@ -402,4 +439,6 @@ def readings(
         LivenessCue.FLAT_VS_3D: geometry.planar_reading,
         LivenessCue.DEPTH_POSE: pose_depth_consistency(window),
         LivenessCue.BLINK: blink_dynamics(window),
+        LivenessCue.DEPTH_CONFIRMED: depth_confirmed(last),
+        LivenessCue.DEPTH_SPOOF: depth_spoof(last),
     }

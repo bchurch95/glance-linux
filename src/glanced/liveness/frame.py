@@ -163,6 +163,10 @@ class LivenessFrame:
     #: data), in which case the gloss/glare cue abstains rather than guessing.
     glare: Optional[GlareSample] = None
 
+    #: 3D Depth / IR readings. None when no depth camera is attached.
+    depth_reading: Optional[CueReading] = None
+    depth_spoof_reading: Optional[CueReading] = None
+
     def points_of(self, region: LandmarkRegion) -> np.ndarray:
         """This frame's points for one region as an (N, 2) float array, in
         stable `index_in_region` order. Empty (0, 2) if the region is absent."""

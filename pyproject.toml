@@ -19,7 +19,7 @@ dependencies = ["numpy>=1.26"]
 runtime = [
     "opencv-python>=4.9",
     "onnxruntime>=1.17",
-    "mediapipe>=0.10.14",
+    "mediapipe>=0.10.14,<1.0.0",
     "cryptography>=42",
 ]
 dev = ["pytest>=8"]

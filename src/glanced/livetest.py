@@ -92,6 +92,7 @@ def run(
     *,
     mode: LivenessMode = LivenessMode.HEAVY,
     device: str = "/dev/video0",
+    depth_device: Optional[str] = "auto",
     scan_seconds: float = 10.0,
     task_path: Optional[Path] = None,
     preview: bool = False,
@@ -107,13 +108,15 @@ def run(
     settled_at: Optional[float] = None
 
     try:
-        with Camera(CameraConfig(device=device)) as camera:
+        with Camera(CameraConfig(device=device, depth_device=depth_device)) as camera:
             sys.stdout.write("\033[?25l")  # hide cursor
-            for native in camera.frames():
-                now = time.monotonic()
+            for pair in camera.frame_pairs():
+                now = pair.timestamp or time.monotonic()
+                native = pair.rgb
+                native_depth = pair.depth
                 frame_times = [t for t in frame_times if now - t < 1.0] + [now]
 
-                observation = processor.process(native, now, want_embedding=False)
+                observation = processor.process_pair(native, native_depth, now, want_embedding=False)
                 if observation is not None:
                     snapshot = analyzer.observe(observation.liveness_frame)
                 else:
