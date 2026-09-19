@@ -182,7 +182,7 @@ Item {
         onAccepted: {
           var submitted = root.passwordText
           root.passwordTextEdited("")
-          if (submitted.length > 0) root.submitPassword(submitted)
+          root.submitPassword(submitted.length > 0 ? submitted : " ")
         }
 
         Keys.onPressed: function(event) {
