@@ -119,7 +119,7 @@ class CaptureWorker(QObject):
         from ..scan import FaceProcessor
 
         try:
-            processor = FaceProcessor()
+            processor = FaceProcessor(enable_depth=False)
         except FileNotFoundError as error:
             self.failed.emit(str(error))
             return
@@ -127,7 +127,7 @@ class CaptureWorker(QObject):
         session = GuidedSession(samples_per_pose=self.samples_per_pose)
         started = time.monotonic()
         try:
-            with Camera(CameraConfig(device=self.device)) as camera:
+            with Camera(CameraConfig(device=self.device, depth_device=None)) as camera:
                 for native in camera.frames():
                     if self._stop:
                         self.failed.emit("cancelled")

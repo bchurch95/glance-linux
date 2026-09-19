@@ -50,7 +50,7 @@ def capture_embeddings(
     last_capture = 0.0
     prompted = -1
 
-    with Camera(CameraConfig(device=device)) as camera:
+    with Camera(CameraConfig(device=device, depth_device=None)) as camera:
         for native in camera.frames():
             now = time.monotonic()
             if now - started > timeout:
@@ -317,7 +317,7 @@ def capture_guided(
     session = GuidedSession(samples_per_pose=samples_per_pose)
     started = time.monotonic()
 
-    with Camera(CameraConfig(device=device)) as camera:
+    with Camera(CameraConfig(device=device, depth_device=None)) as camera:
         for native in camera.frames():
             if should_stop is not None and should_stop():
                 raise RuntimeError("cancelled")

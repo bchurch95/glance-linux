@@ -166,7 +166,7 @@ def _enroll(args: argparse.Namespace) -> int:
     processor = None
     if not args.gui:
         try:
-            processor = FaceProcessor()
+            processor = FaceProcessor(enable_depth=False)
         except FileNotFoundError as error:
             print(error, file=sys.stderr)
             return 2
